@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using Beasts.Data;
@@ -35,7 +34,7 @@ public partial class Beasts
                      .Where(positioned => positioned != null))
         {
             DrawFilledCircleInWorldPosition(
-                GameController.IngameState.Data.ToWorldWithTerrainHeight(positioned.GridPosition), 50, SharpDX.Color.Red
+                GameController.IngameState.Data.ToWorldWithTerrainHeight(positioned.GridPosition), 50, Color.Red
             );
         }
     }
@@ -49,34 +48,34 @@ public partial class Beasts
             var beast = BeastsDatabase.SpecialBeasts.Where(beast => trackedBeast.Metadata == beast.Path).First();
 
             var pos = GameController.IngameState.Data.ToWorldWithTerrainHeight(trackedBeast.Positioned.GridPosition);
-            Graphics.DrawText(beast.DisplayName, GameController.IngameState.Camera.WorldToScreen(pos), SharpDX.Color.White, FontAlign.Center);
+            Graphics.DrawText(beast.DisplayName, GameController.IngameState.Camera.WorldToScreen(pos), Color.White, FontAlign.Center);
 
             DrawFilledCircleInWorldPosition(pos, 50, GetSpecialBeastColor(beast.DisplayName));
         }
     }
 
-    private SharpDX.Color GetSpecialBeastColor(string beastName)
+    private Color GetSpecialBeastColor(string beastName)
     {
         if (beastName.Contains("Vivid"))
         {
-            return new SharpDX.Color(255, 250, 0);
+            return new Color(255, 250, 0);
         }
 
         if (beastName.Contains("Wild"))
         {
-            return new SharpDX.Color(255, 0, 235);
+            return new Color(255, 0, 235);
         }
 
         if (beastName.Contains("Primal"))
         {
-            return new SharpDX.Color(0, 245, 255);
+            return new Color(0, 245, 255);
         }
 
         if (beastName.Contains("Black")) {
-            return new SharpDX.Color(255, 255, 255);
+            return new Color(255, 255, 255);
         }
 
-        return SharpDX.Color.Red;
+        return Color.Red;
     }
 
     private void DrawMinimapPrice(int threshold)
@@ -141,7 +140,7 @@ public partial class Beasts
             (iconZ - posZ) / (9f / mapWindow.LargeMapZoom));
 
 
-        var size = Graphics.DrawText(text, point, SharpDX.Color.Green,
+        var size = Graphics.DrawText(text, point, Color.Green,
             20, FontAlign.Center);
         float maxWidth = 0;
         float maxheight = 0;
@@ -149,8 +148,8 @@ public partial class Beasts
         point.Y += size.Y;
         maxheight += size.Y;
         maxWidth = Math.Max(maxWidth, size.X);
-        var background = new SharpDX.RectangleF(point.X - maxWidth / 2 - 3, point.Y - maxheight, maxWidth + 6, maxheight);
-        Graphics.DrawBox(background, SharpDX.Color.Black);
+        var background = new RectangleF(point.X - maxWidth / 2 - 3, point.Y - maxheight, maxWidth + 6, maxheight);
+        Graphics.DrawBox(background, Color.Black);
     }
 
     public static Vector2 DeltaInWorldToMinimapDelta(Vector2 delta, double diag, float scale, float deltaZ = 0)
@@ -183,13 +182,13 @@ public partial class Beasts
 
             var center = new Vector2(beast.GetClientRect().Center.X, beast.GetClientRect().Center.Y);
 
-            Graphics.DrawBox(beast.GetClientRect(), new SharpDX.Color(0, 0, 0, 0.5f));
-            Graphics.DrawFrame(beast.GetClientRect(), SharpDX.Color.White, 2);
-            Graphics.DrawText(beastMetadata.DisplayName, center, SharpDX.Color.White, FontAlign.Center);
+            Graphics.DrawBox(beast.GetClientRect(), new Color(0, 0, 0, 0.5f));
+            Graphics.DrawFrame(beast.GetClientRect(), Color.White, 2);
+            Graphics.DrawText(beastMetadata.DisplayName, center, Color.White, FontAlign.Center);
 
             var text = Prices[beastMetadata.DisplayName].ToString(CultureInfo.InvariantCulture) + "c";
             var textPos = center + new Vector2(0, 20);
-            Graphics.DrawText(text, textPos, SharpDX.Color.White, FontAlign.Center);
+            Graphics.DrawText(text, textPos, Color.White, FontAlign.Center);
         }
     }
 
@@ -254,7 +253,7 @@ public partial class Beasts
         ImGui.End();
     }
 
-    private void DrawFilledCircleInWorldPosition(Vector3 position, float radius, SharpDX.Color color)
+    private void DrawFilledCircleInWorldPosition(Vector3 position, float radius, Color color)
     {
         var circlePoints = new List<Vector2>();
         const int segments = 15;
@@ -273,7 +272,7 @@ public partial class Beasts
             circlePoints.Add(GameController.Game.IngameState.Camera.WorldToScreen(nextWorldPos));
         }
 
-        Graphics.DrawConvexPolyFilled(circlePoints.ToArray(), color with { A = SharpDX.Color.ToByte((int)((double)0.2f * byte.MaxValue)) });
+        Graphics.DrawConvexPolyFilled(circlePoints.ToArray(), color with { A = Color.ToByte((int)((double)0.2f * byte.MaxValue)) });
         Graphics.DrawPolyLine(circlePoints.ToArray(), color, 2);
     }
 }
