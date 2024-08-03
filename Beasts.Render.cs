@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using Beasts.Data;
 using Beasts.ExileCore;
+using ExileCore;
 using ExileCore.PoEMemory.Components;
+using ExileCore.PoEMemory.MemoryObjects;
 using ExileCore.Shared.Enums;
+using ExileCore.Shared.Helpers;
 using ImGuiNET;
 using SharpDX;
 using Vector2 = System.Numerics.Vector2;
@@ -20,7 +24,8 @@ public partial class Beasts
         DrawInGameBeasts();
         DrawInGameSpecialBeasts();
         DrawBestiaryPanel();
-        DrawBeastsWindow();
+        DrawBeastsWindow(Settings.Threshold);
+        DrawMinimapPrice(Settings.Threshold);
     }
 
     private void DrawInGameBeasts()
@@ -30,7 +35,7 @@ public partial class Beasts
                      .Where(positioned => positioned != null))
         {
             DrawFilledCircleInWorldPosition(
-                GameController.IngameState.Data.ToWorldWithTerrainHeight(positioned.GridPosition), 50, Color.Red
+                GameController.IngameState.Data.ToWorldWithTerrainHeight(positioned.GridPosition), 50, SharpDX.Color.Red
             );
         }
     }
@@ -44,34 +49,121 @@ public partial class Beasts
             var beast = BeastsDatabase.SpecialBeasts.Where(beast => trackedBeast.Metadata == beast.Path).First();
 
             var pos = GameController.IngameState.Data.ToWorldWithTerrainHeight(trackedBeast.Positioned.GridPosition);
-            Graphics.DrawText(beast.DisplayName, GameController.IngameState.Camera.WorldToScreen(pos), Color.White, FontAlign.Center);
+            Graphics.DrawText(beast.DisplayName, GameController.IngameState.Camera.WorldToScreen(pos), SharpDX.Color.White, FontAlign.Center);
 
             DrawFilledCircleInWorldPosition(pos, 50, GetSpecialBeastColor(beast.DisplayName));
         }
     }
 
-    private Color GetSpecialBeastColor(string beastName)
+    private SharpDX.Color GetSpecialBeastColor(string beastName)
     {
         if (beastName.Contains("Vivid"))
         {
-            return new Color(255, 250, 0);
+            return new SharpDX.Color(255, 250, 0);
         }
 
         if (beastName.Contains("Wild"))
         {
-            return new Color(255, 0, 235);
+            return new SharpDX.Color(255, 0, 235);
         }
 
         if (beastName.Contains("Primal"))
         {
-            return new Color(0, 245, 255);
+            return new SharpDX.Color(0, 245, 255);
         }
 
         if (beastName.Contains("Black")) {
-            return new Color(255, 255, 255);
+            return new SharpDX.Color(255, 255, 255);
         }
 
-        return Color.Red;
+        return SharpDX.Color.Red;
+    }
+
+    private void DrawMinimapPrice(int threshold)
+    {
+
+        foreach (var beast in _trackedBeasts.Values)
+        {
+            var b = BeastsDatabase.AllBeasts.Find(b => b.Path == beast.Metadata);
+            if (b.Priority < threshold)
+            {
+                continue;
+            }
+            if (!Prices.ContainsKey(b.DisplayName))
+            {
+                DrawToLargeMiniMapText(beast, "?c");
+                //continue;
+            }
+            string text;
+            if (beast.Stats.TryGetValue(GameStat.MovementVelocityPct, out int pct) && pct == -100)
+            {
+                text = "V";
+            }
+            else
+            {
+                text = $"{b.DisplayName} {Prices[b.DisplayName]}c";
+            }
+
+            DrawToLargeMiniMapText(beast, text);
+        }
+    }
+
+    private void DrawToLargeMiniMapText(Entity entity, string text)
+    {
+        var camera = GameController.Game.IngameState.Camera;
+        var mapWindow = GameController.Game.IngameState.IngameUi.Map;
+        if (mapWindow.LargeMap.IsVisible != true)
+        {
+            return;
+        }
+        if (GameController.Game.IngameState.UIRoot.Scale == 0)
+        {
+            DebugWindow.LogError(
+                "ExpeditionIcons: Seems like UIRoot.Scale is 0. Icons will not be drawn because of that.");
+        }
+
+        var mapRect = mapWindow.GetClientRect();
+        var playerPos = GameController.Player.GridPosNum;
+        var posZ = GameController.Player.GetComponent<Render>().Z;
+        var screenCenter = new Vector2(mapRect.Width / 2, mapRect.Height / 2).Translate(0, -20) +
+                           new Vector2(mapRect.X, mapRect.Y) +
+                           new Vector2(mapWindow.LargeMapShiftX, mapWindow.LargeMapShiftY);
+        var diag = (float)Math.Sqrt(camera.Width * camera.Width + camera.Height * camera.Height);
+        var k = camera.Width < 1024f ? 1120f : 1024f;
+        var scale = k / camera.Height * camera.Width * 3f / 4f / mapWindow.LargeMapZoom;
+        var render = entity.GetComponent<Render>();
+        if (render is null)
+        {
+            return;
+        }
+        var iconZ = render.Z;
+        var point = screenCenter + DeltaInWorldToMinimapDelta(entity.GridPosNum - playerPos, diag, scale,
+            (iconZ - posZ) / (9f / mapWindow.LargeMapZoom));
+
+
+        var size = Graphics.DrawText(text, point, SharpDX.Color.Green,
+            20, FontAlign.Center);
+        float maxWidth = 0;
+        float maxheight = 0;
+        //not sure about sizes below, need test
+        point.Y += size.Y;
+        maxheight += size.Y;
+        maxWidth = Math.Max(maxWidth, size.X);
+        var background = new SharpDX.RectangleF(point.X - maxWidth / 2 - 3, point.Y - maxheight, maxWidth + 6, maxheight);
+        Graphics.DrawBox(background, SharpDX.Color.Black);
+    }
+
+    public static Vector2 DeltaInWorldToMinimapDelta(Vector2 delta, double diag, float scale, float deltaZ = 0)
+    {
+        const float CAMERA_ANGLE = 38 * MathUtil.Pi / 180;
+
+        // Values according to 40 degree rotation of cartesian coordiantes, still doesn't seem right but closer
+        var cos = (float)(diag * Math.Cos(CAMERA_ANGLE) / scale);
+        var sin = (float)(diag * Math.Sin(CAMERA_ANGLE) /
+                           scale); // possible to use cos so angle = nearly 45 degrees
+
+        // 2D rotation formulas not correct, but it's what appears to work?
+        return new Vector2((delta.X - delta.Y) * cos, deltaZ - (delta.X + delta.Y) * sin);
     }
 
     private void DrawBestiaryPanel()
@@ -91,17 +183,17 @@ public partial class Beasts
 
             var center = new Vector2(beast.GetClientRect().Center.X, beast.GetClientRect().Center.Y);
 
-            Graphics.DrawBox(beast.GetClientRect(), new Color(0, 0, 0, 0.5f));
-            Graphics.DrawFrame(beast.GetClientRect(), Color.White, 2);
-            Graphics.DrawText(beastMetadata.DisplayName, center, Color.White, FontAlign.Center);
+            Graphics.DrawBox(beast.GetClientRect(), new SharpDX.Color(0, 0, 0, 0.5f));
+            Graphics.DrawFrame(beast.GetClientRect(), SharpDX.Color.White, 2);
+            Graphics.DrawText(beastMetadata.DisplayName, center, SharpDX.Color.White, FontAlign.Center);
 
             var text = Prices[beastMetadata.DisplayName].ToString(CultureInfo.InvariantCulture) + "c";
             var textPos = center + new Vector2(0, 20);
-            Graphics.DrawText(text, textPos, Color.White, FontAlign.Center);
+            Graphics.DrawText(text, textPos, SharpDX.Color.White, FontAlign.Center);
         }
     }
 
-    private void DrawBeastsWindow()
+    private void DrawBeastsWindow(int threshold)
     {
         ImGui.SetNextWindowSize(new Vector2(0, 0));
         ImGui.SetNextWindowBgAlpha(0.6f);
@@ -115,7 +207,7 @@ public partial class Beasts
             foreach (var beastMetadata in _trackedBeasts
                          .Select(trackedBeast => trackedBeast.Value)
                          .Select(beast => BeastsDatabase.AllBeasts.Find(b => b.Path == beast.Metadata))
-                         .Where(beastMetadata => beastMetadata != null))
+                         .Where(beastMetadata => beastMetadata != null && beastMetadata.Priority >= threshold))
             {
                 ImGui.TableNextRow();
 
@@ -162,7 +254,7 @@ public partial class Beasts
         ImGui.End();
     }
 
-    private void DrawFilledCircleInWorldPosition(Vector3 position, float radius, Color color)
+    private void DrawFilledCircleInWorldPosition(Vector3 position, float radius, SharpDX.Color color)
     {
         var circlePoints = new List<Vector2>();
         const int segments = 15;
@@ -181,7 +273,7 @@ public partial class Beasts
             circlePoints.Add(GameController.Game.IngameState.Camera.WorldToScreen(nextWorldPos));
         }
 
-        Graphics.DrawConvexPolyFilled(circlePoints.ToArray(), color with { A = Color.ToByte((int)((double)0.2f * byte.MaxValue)) });
+        Graphics.DrawConvexPolyFilled(circlePoints.ToArray(), color with { A = SharpDX.Color.ToByte((int)((double)0.2f * byte.MaxValue)) });
         Graphics.DrawPolyLine(circlePoints.ToArray(), color, 2);
     }
 }

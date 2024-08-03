@@ -20,6 +20,12 @@ public partial class Beasts : BaseSettingsPlugin<BeastsSettings>
     public override bool Initialise()
     {
         Prices = PoeNinja.GetBeastsPrices().Result;
+        Settings.UpdatePrices.OnPressed += () =>
+        {
+            LogMessage("[Beast] Updating prices");
+            Prices = PoeNinja.GetBeastsPrices().Result;
+            LogMessage("[Beast] Updated prices");
+        };
         return true;
     }
 
